@@ -1,0 +1,43 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+
+  push_to_registry:
+    name: Push Docker image to Docker Hub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        name: Check out code
+
+      - uses: mr-smithers-excellent/docker-build-push@v5
+        name: Build & push Spark master Docker image
+        with:
+          image:  ${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_REPOSITORY }}
+          tags: delta-1.0.0-spark-3.1.1-hive-3.1.2
+          registry: docker.io
+          dockerfile: ./Dockerfile
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+  test:
+    needs: push_to_registry
+    name: Test Jupyter notebook server
+    runs-on: ubuntu-latest
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Start all containers via docker-compose
+        run: docker run --name jupyter-nb -d -p '8888:8888' ${{ secrets.DOCKER_HUB_USERNAME }}/${{ secrets.DOCKER_HUB_REPOSITORY }}:delta-1.0.0-spark-3.1.1-hive-3.1.2
+        
+      - name: Wait for jupyter notebook server to be up 
+        run: docker run willwill/wait-for-it localhost:8888 -- echo "Jupyter notebook is up"
+
+      - name: Check if the notebook is working fine
+        run: docker exec jupyter-nb jupyter notebook --version
+        
+        
